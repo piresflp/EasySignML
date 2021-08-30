@@ -97,21 +97,38 @@ def extract_keypoints(results):
 cap = cv2.VideoCapture(0)
 # configura modelo mediapipe
 with mp_holistic.Holistic(min_detection_confidence=0.3, min_tracking_confidence=0.5) as holistic:
-    while cap.isOpened():
-        ret, frame = cap.read()  # lê o frame atual
+    for action in actions:  # loop pelas ações
+        for sequence in range(no_sequences):  # loop pelas sequências (vídeos)
+            # loop pelos frames dos videos
+            for frame_num in range(sequence_length):
 
-        image, results = mediapipe_detection(frame, holistic)
-        print(results)
+                ret, frame = cap.read()  # lê o frame atual
 
-        # Desenha pontos
-        draw_styled_landmarks(image, results)
+                image, results = mediapipe_detection(frame, holistic)
+                print(results)
 
-        cv2.imshow('OpenCV Feed', image)  # mostra o frame na tela
+                # Desenha pontos
+                draw_styled_landmarks(image, results)
 
-        # EXTRAINDO KEYPOINTS
+                if frame_num == 0:
+                    cv2.putText(image, 'STARTING COLLECTION', (120, 200),
+                                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 4, cv2.LINE_AA)
+                    cv2.putText(image, 'Collecting frames for {} Video Number {}'.format(action, sequence), (15, 12),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1, cv2.LINE_AA)
+                    cv2.imshow('OpenCV Feed', image)
+                    cv2.waitKey(1500)
+                else:
+                    cv2.putText(image, 'Collecting frames for {} Video Number {}'.format(action, sequence), (15, 12),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1, cv2.LINE_AA)
+                    cv2.imshow('OpenCV Feed', image)
 
-        # fecha o programa ao pressionar a tecla 'Q'
-        if cv2.waitKey(10) & 0xFF == ord('q'):
-            break
+                keypoints = extract_keypoints(results)
+                npy_path = os.path.join(
+                    DATA_PATH, action, str(sequence), str(frame_num))
+                np.save(npy_path, keypoints)
+
+                # fecha o programa ao pressionar a tecla 'Q'
+                if cv2.waitKey(10) & 0xFF == ord('q'):
+                    break
     cap.release()
     cv2.destroyAllWindows()
