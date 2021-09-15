@@ -1,12 +1,5 @@
 # pip install tensorflow==2.4.1 tensorflow-gpu==2.4.1 opencv-python mediapipe sklearn matplotlib
 # Importando bibliotecas necessárias
-from scipy import stats
-from tensorflow.keras.callbacks import TensorBoard
-from tensorflow.keras.layers import LSTM, Dense
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.utils import to_categorical
-from sklearn.metrics import multilabel_confusion_matrix, accuracy_score
-from sklearn.model_selection import train_test_split
 import cv2
 import numpy as np
 import os
@@ -23,36 +16,12 @@ sequence_length = 30  # cada video com 30 frames
 actions = np.array(['ola', 'eu_te_amo', 'boa_noite']
                    )  # ações que tentaremos detectar
 
-colors = [(245, 117, 16), (117, 245, 16), (16, 117, 245)]
-
-
-def prob_viz(res, actions, input_frame, colors):
-    output_frame = input_frame.copy()
-    for num, prob in enumerate(res):
-        cv2.rectangle(output_frame, (0, 60+num*40),
-                      (int(prob*100), 90+num*40), colors[num], -1)
-        cv2.putText(output_frame, actions[num], (0, 85+num*40),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
-
-    return output_frame
-
-
-sequence = []
-sentence = []
-predictions = []
-threshold = 0.5
-
-model = Sequential()
-model.add(LSTM(64, return_sequences=True,
-          activation='relu', input_shape=(30, 1662)))
-model.add(LSTM(128, return_sequences=True, activation='relu'))
-model.add(LSTM(64, return_sequences=False, activation='relu'))
-model.add(Dense(64, activation='relu'))
-model.add(Dense(32, activation='relu'))
-model.add(Dense(actions.shape[0], activation='softmax'))
-model.compile(optimizer='Adam', loss='categorical_crossentropy',
-              metrics=['categorical_accuracy'])
-model.load_weights('action.h5')
+for action in actions:
+    for sequence in range(no_sequences):
+        try:
+            os.makedirs(os.path.join(DATA_PATH, action, str(sequence)))
+        except:
+            pass
 
 
 def mediapipe_detection(image, model):
@@ -122,53 +91,49 @@ def extract_keypoints(results):
 cap = cv2.VideoCapture(0)
 # Set mediapipe model
 with mp_holistic.Holistic(min_detection_confidence=0.5, min_tracking_confidence=0.5) as holistic:
-    while cap.isOpened():
 
-        # Read feed
-        ret, frame = cap.read()
+    # NEW LOOP
+    # Loop through actions
+    for action in actions:
+        # Loop through sequences aka videos
+        for sequence in range(no_sequences):
+            # Loop through video length aka sequence length
+            for frame_num in range(sequence_length):
 
-        # Make detections
-        image, results = mediapipe_detection(frame, holistic)
-        print(results)
+                # Read feed
+                ret, frame = cap.read()
 
-        # Draw landmarks
-        draw_styled_landmarks(image, results)
+                # Make detections
+                image, results = mediapipe_detection(frame, holistic)
+#                 print(results)
 
-        # 2. Prediction logic
-        keypoints = extract_keypoints(results)
-        sequence.append(keypoints)
-        sequence = sequence[-30:]
+                # Draw landmarks
+                draw_styled_landmarks(image, results)
 
-        if len(sequence) == 30:
-            res = model.predict(np.expand_dims(sequence, axis=0))[0]
-            print(actions[np.argmax(res)])
-            predictions.append(np.argmax(res))
+                # NEW Apply wait logic
+                if frame_num == 0:
+                    cv2.putText(image, 'STARTING COLLECTION', (120, 200),
+                                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 4, cv2.LINE_AA)
+                    cv2.putText(image, 'Collecting frames for {} Video Number {}'.format(action, sequence), (15, 12),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1, cv2.LINE_AA)
+                    # Show to screen
+                    cv2.imshow('OpenCV Feed', image)
+                    cv2.waitKey(1500)
+                else:
+                    cv2.putText(image, 'Collecting frames for {} Video Number {}'.format(action, sequence), (15, 12),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1, cv2.LINE_AA)
+                    # Show to screen
+                    cv2.imshow('OpenCV Feed', image)
 
-        # 3. Viz logic
-            if np.unique(predictions[-10:])[0] == np.argmax(res):
-                if res[np.argmax(res)] > threshold:
+                # NEW Export keypoints
+                keypoints = extract_keypoints(results)
+                npy_path = os.path.join(
+                    DATA_PATH, action, str(sequence), str(frame_num))
+                np.save(npy_path, keypoints)
 
-                    if len(sentence) > 0:
-                        if actions[np.argmax(res)] != sentence[-1]:
-                            sentence.append(actions[np.argmax(res)])
-                    else:
-                        sentence.append(actions[np.argmax(res)])
+                # Break gracefully
+                if cv2.waitKey(10) & 0xFF == ord('q'):
+                    break
 
-            if len(sentence) > 5:
-                sentence = sentence[-5:]
-
-            # Viz probabilities
-            image = prob_viz(res, actions, image, colors)
-
-        cv2.rectangle(image, (0, 0), (640, 40), (245, 117, 16), -1)
-        cv2.putText(image, ' '.join(sentence), (3, 30),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
-
-        # Show to screen
-        cv2.imshow('OpenCV Feed', image)
-
-        # Break gracefully
-        if cv2.waitKey(10) & 0xFF == ord('q'):
-            break
     cap.release()
     cv2.destroyAllWindows()
