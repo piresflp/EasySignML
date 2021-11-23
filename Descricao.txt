@@ -1,0 +1,9 @@
+Pasta Logs: Contém os históricos de treinamento dos modelos, em forma de TensorBoard.
+
+Pasta MP_Data: Dados dos sinais.
+
+deteccao_sinais.py: Script para detectar os sinais, configurado para utilizar o modelo 'action_v1.h5'
+
+gravacao_dos_gestos.py: Script para gravar os sinais, os sinais que serão gravados estão indicados no vetor 'actions', do mesmo arquivo.
+
+Por fim, tentamos treinar modelos com 10 sinais, em vez de 3. Estes estão salvos nos modelos com nome 'dezsinais'
